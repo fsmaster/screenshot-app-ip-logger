@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Link Tracker</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Create Tracking Link</h1>
+    <form action="/create" method="POST" enctype="multipart/form-data">
+      <label for="url">Paste URL:</label>
+      <textarea id="url" name="url" rows="3" placeholder="https://example.com"></textarea>
+
+      <div class="or">— or —</div>
+
+      <label for="image">Upload image:</label>
+      <input type="file" id="image" name="image" accept="image/*">
+
+      <button type="submit">Generate Links</button>
+    </form>
+  </div>
+</body>
+</html>

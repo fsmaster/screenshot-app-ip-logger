@@ -1,0 +1,38 @@
+﻿# ────────────────────────────────────────────────
+# Node.js / npm standard ignores
+# ────────────────────────────────────────────────
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+.pnpm-debug.log
+package-lock.json      # ← ignoring as you requested (debated choice — see note below)
+
+# ────────────────────────────────────────────────
+# Project-specific sensitive / generated files
+# ────────────────────────────────────────────────
+certs/
+tracker.db
+tracker.db-journal     # sqlite temp file
+uploads/
+public/uploads/        # if you use public/uploads/
+*.log
+*.bak
+*.tmp
+.DS_Store              # macOS junk (harmless on Windows)
+Thumbs.db              # Windows junk
+
+# ────────────────────────────────────────────────
+# Editor / IDE files
+# ────────────────────────────────────────────────
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ────────────────────────────────────────────────
+# Optional: tests, coverage, build artifacts
+# ────────────────────────────────────────────────
+coverage/
+dist/
+build/

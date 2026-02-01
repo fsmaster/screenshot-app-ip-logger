@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tracking Statistics</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; background: #f8fafc; }
+    h1 { color: #1e40af; }
+    table { width:100%; border-collapse: collapse; margin-top:1.5rem; background:white; box-shadow:0 2px 8px rgba(0,0,0,0.1); }
+    th, td { padding: 0.9rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
+    th { background: #eff6ff; }
+    tr:hover { background: #f1f5f9; }
+  </style>
+</head>
+<body>
+  <h1>Visits</h1>
+
+  <% if (visits.length === 0) { %>
+    <p>No visits yet.</p>
+  <% } else { %>
+    <table>
+      <tr>
+        <th>Time</th>
+        <th>IP</th>
+        <th>User-Agent</th>
+        <th>Language</th>
+      </tr>
+      <% visits.forEach(v => { %>
+        <tr>
+          <td><%= new Date(v.visited_at).toLocaleString() %></td>
+          <td><%= v.ip %></td>
+          <td><%= v.user_agent || '—' %></td>
+          <td><%= v.accept_lang || '—' %></td>
+        </tr>
+      <% }) %>
+    </table>
+  <% } %>
+</body>
+</html>
