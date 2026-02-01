@@ -1,25 +1,278 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="scroll-smooth">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Link Tracker</title>
-  <link rel="stylesheet" href="/styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TrackLink – Invisible Trackers</title>
+
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: white;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .card {
+      background: rgba(30, 41, 59, 0.65);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 1.5rem;
+      padding: 2.5rem;
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7);
+    }
+
+    .upload-zone {
+      border: 2px dashed #475569;
+      border-radius: 1rem;
+      padding: 2.5rem 1rem;
+      text-align: center;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .upload-zone:hover,
+    .upload-zone:focus-within,
+    .upload-zone.active {
+      border-color: #22d3ee;
+      background: rgba(14, 165, 233, 0.05);
+    }
+
+    .upload-zone.dragover {
+      border-color: #06b6d4;
+      background: rgba(14, 165, 233, 0.15);
+      box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.2);
+    }
+
+    input[type="url"] {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid #475569;
+      color: white;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      width: 100%;
+    }
+
+    input[type="url"]::placeholder {
+      color: #94a3b8;
+    }
+
+    button[type="submit"] {
+      background: linear-gradient(to right, #0ea5e9, #0284c7);
+      color: white;
+      font-weight: 600;
+      padding: 1.25rem;
+      border-radius: 0.75rem;
+      width: 100%;
+      transition: all 0.25s;
+    }
+
+    button[type="submit"]:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(14, 165, 233, 0.4);
+    }
+
+    button:disabled {
+      background: #334155;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .or-divider {
+      position: relative;
+      text-align: center;
+      margin: 1.75rem 0;
+    }
+
+    .or-divider::before,
+    .or-divider::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 42%;
+      height: 1px;
+      background: #475569;
+    }
+
+    .or-divider::before { left: 0; }
+    .or-divider::after  { right: 0; }
+
+    #error-message {
+      min-height: 1.25rem;
+      color: #f87171;
+      font-size: 0.875rem;
+      text-align: center;
+    }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Create Tracking Link</h1>
-    <form action="/create" method="POST" enctype="multipart/form-data">
-      <label for="url">Paste URL:</label>
-      <textarea id="url" name="url" rows="3" placeholder="https://example.com"></textarea>
 
-      <div class="or">— or —</div>
+  <div class="text-center mb-12">
+    <h1 class="text-5xl md:text-6xl font-bold tracking-tight bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-500 bg-clip-text text-transparent">
+      TrackLink
+    </h1>
+    <p class="mt-4 text-xl text-gray-300">
+      Short links that quietly show who clicked
+    </p>
+  </div>
 
-      <label for="image">Upload image:</label>
-      <input type="file" id="image" name="image" accept="image/*">
+  <div class="card">
+    <form action="/create" method="POST" enctype="multipart/form-data" id="track-form">
 
-      <button type="submit">Generate Links</button>
+      <!-- URL input -->
+      <div class="mb-8">
+        <label class="block text-lg font-medium text-gray-200 mb-3">
+          Paste URL to track
+        </label>
+        <input
+          type="url"
+          name="url"
+          placeholder="https://example.com"
+          id="url-input"
+        />
+      </div>
+
+      <!-- OR divider -->
+      <div class="or-divider">
+        <span class="relative z-10 px-5 py-1 bg-gray-900 text-gray-400 text-sm rounded-full">
+          or
+        </span>
+      </div>
+
+      <!-- Modern file upload zone -->
+      <div class="mb-8">
+        <label class="block text-lg font-medium text-gray-200 mb-3">
+          Or upload an image
+        </label>
+
+        <label class="upload-zone" id="upload-label">
+          <input
+            type="file"
+            name="image"
+            accept="image/*"
+            id="image-input"
+            class="hidden"
+          />
+
+          <div class="flex flex-col items-center justify-center py-8">
+            <svg class="w-12 h-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+
+            <p class="text-gray-300 font-medium text-lg">
+              Click to select or drag & drop image here
+            </p>
+            <p class="text-sm text-gray-500 mt-2">
+              PNG, JPG, GIF • max 10 MB
+            </p>
+
+            <p id="file-name" class="mt-4 text-sm text-cyan-400 hidden"></p>
+          </div>
+        </label>
+      </div>
+
+      <!-- Error message area -->
+      <div id="error-message"></div>
+
+      <!-- Submit button -->
+      <button type="submit" id="submit-btn" disabled>
+        Generate Tracking Link
+      </button>
+
     </form>
   </div>
+
+  <p class="mt-10 text-sm text-gray-500">
+    No sign-up • Instant • Use responsibly
+  </p>
+
+  <!-- Lightweight JS: validation + visual feedback (does NOT block native submit) -->
+  <script>
+    const form = document.getElementById('track-form');
+    const urlInput = document.getElementById('url-input');
+    const imageInput = document.getElementById('image-input');
+    const submitBtn = document.getElementById('submit-btn');
+    const errorMsg = document.getElementById('error-message');
+    const fileNameDisplay = document.getElementById('file-name');
+    const uploadLabel = document.getElementById('upload-label');
+
+    // Enable/disable submit button based on input
+    function checkInputs() {
+      const hasUrl = urlInput.value.trim().length > 0;
+      const hasImage = imageInput.files.length > 0;
+
+      submitBtn.disabled = !(hasUrl || hasImage);
+
+      if (hasUrl || hasImage) {
+        errorMsg.textContent = '';
+      }
+    }
+
+    // Update UI on change
+    urlInput.addEventListener('input', checkInputs);
+    imageInput.addEventListener('change', () => {
+      checkInputs();
+      if (imageInput.files.length > 0) {
+        fileNameDisplay.textContent = imageInput.files[0].name;
+        fileNameDisplay.classList.remove('hidden');
+        uploadLabel.classList.add('active');
+      } else {
+        fileNameDisplay.classList.add('hidden');
+        uploadLabel.classList.remove('active');
+      }
+    });
+
+    // Drag & drop visual feedback
+    ['dragenter', 'dragover'].forEach(eventName => {
+      uploadLabel.addEventListener(eventName, e => {
+        e.preventDefault();
+        uploadLabel.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      uploadLabel.addEventListener(eventName, e => {
+        e.preventDefault();
+        uploadLabel.classList.remove('dragover');
+      });
+    });
+
+    uploadLabel.addEventListener('drop', e => {
+      if (e.dataTransfer.files.length > 0) {
+        imageInput.files = e.dataTransfer.files;
+        imageInput.dispatchEvent(new Event('change'));
+      }
+    });
+
+    // Optional: show error if user tries to submit with empty fields
+    // (native browser validation may catch it, but we make it nicer)
+    form.addEventListener('submit', e => {
+      const hasUrl = urlInput.value.trim().length > 0;
+      const hasImage = imageInput.files.length > 0;
+
+      if (!hasUrl && !hasImage) {
+        e.preventDefault(); // only block here if truly empty
+        errorMsg.textContent = 'Please provide a URL or upload an image';
+        return;
+      }
+
+      // If valid → let native submit proceed
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Creating...';
+      errorMsg.textContent = '';
+    });
+  </script>
+
 </body>
 </html>
