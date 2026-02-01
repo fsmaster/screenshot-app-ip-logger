@@ -3,193 +3,274 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>TrackLink – Invisible Links, Visible Results</title>
-  <meta name="description" content="Create short tracking links. See who clicked, where from, and what device they used."/>
+  <title>TrackLink – Invisible Trackers</title>
 
-  <!-- Tailwind CSS CDN -->
+  <!-- Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            primary: {
-              50: '#f0f9ff',
-              100: '#e0f2fe',
-              200: '#bae6fd',
-              300: '#7dd3fc',
-              400: '#38bdf8',
-              500: '#0ea5e9',
-              600: '#0284c7',
-              700: '#0369a1',
-              800: '#075985',
-              900: '#0c4a6e',
-            }
-          },
-          fontFamily: {
-            sans: ['Inter var', 'system-ui', 'sans-serif'],
-          },
-        }
-      }
-    }
-  </script>
-
-  <!-- Inter font -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
-    body { font-feature-settings: "cv02", "cv03", "cv04", "cv11"; }
-    .glass {
-      background: rgba(255, 255, 255, 0.07);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.125);
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: white;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
     }
-    .dark .glass {
-      background: rgba(30, 41, 59, 0.4);
-      border-color: rgba(255, 255, 255, 0.08);
+
+    .card {
+      background: rgba(30, 41, 59, 0.65);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 1.5rem;
+      padding: 2.5rem;
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7);
+    }
+
+    .upload-zone {
+      border: 2px dashed #475569;
+      border-radius: 1rem;
+      padding: 2.5rem 1rem;
+      text-align: center;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .upload-zone:hover,
+    .upload-zone:focus-within,
+    .upload-zone.active {
+      border-color: #22d3ee;
+      background: rgba(14, 165, 233, 0.05);
+    }
+
+    .upload-zone.dragover {
+      border-color: #06b6d4;
+      background: rgba(14, 165, 233, 0.15);
+      box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.2);
+    }
+
+    input[type="url"] {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid #475569;
+      color: white;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      width: 100%;
+    }
+
+    input[type="url"]::placeholder {
+      color: #94a3b8;
+    }
+
+    button[type="submit"] {
+      background: linear-gradient(to right, #0ea5e9, #0284c7);
+      color: white;
+      font-weight: 600;
+      padding: 1.25rem;
+      border-radius: 0.75rem;
+      width: 100%;
+      transition: all 0.25s;
+    }
+
+    button[type="submit"]:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(14, 165, 233, 0.4);
+    }
+
+    button:disabled {
+      background: #334155;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .or-divider {
+      position: relative;
+      text-align: center;
+      margin: 1.75rem 0;
+    }
+
+    .or-divider::before,
+    .or-divider::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 42%;
+      height: 1px;
+      background: #475569;
+    }
+
+    .or-divider::before { left: 0; }
+    .or-divider::after  { right: 0; }
+
+    #error-message {
+      min-height: 1.25rem;
+      color: #f87171;
+      font-size: 0.875rem;
+      text-align: center;
     }
   </style>
 </head>
-<body class="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-slate-100 min-h-screen flex flex-col">
+<body>
 
-  <!-- Dark mode toggle -->
-  <button id="theme-toggle" class="fixed top-5 right-5 z-50 p-3 rounded-full bg-slate-800/50 hover:bg-slate-700/70 transition backdrop-blur-sm">
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path id="sun" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-      <path id="moon" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-    </svg>
-  </button>
+  <div class="text-center mb-12">
+    <h1 class="text-5xl md:text-6xl font-bold tracking-tight bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-500 bg-clip-text text-transparent">
+      TrackLink
+    </h1>
+    <p class="mt-4 text-xl text-gray-300">
+      Short links that quietly show who clicked
+    </p>
+  </div>
 
-  <main class="flex-grow flex items-center justify-center px-4 py-16">
-    <div class="max-w-3xl w-full text-center space-y-10">
+  <div class="card">
+    <form action="/create" method="POST" enctype="multipart/form-data" id="track-form">
 
-      <!-- Logo / Title -->
-      <div class="space-y-4">
-        <h1 class="text-5xl md:text-7xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-500 animate-gradient-x">
-          TrackLink
-        </h1>
-        <p class="text-xl md:text-2xl text-slate-300 max-w-2xl mx-auto">
-          Create short links that <span class="font-semibold text-cyan-400">silently reveal</span> who clicked them.
-        </p>
+      <!-- URL input -->
+      <div class="mb-8">
+        <label class="block text-lg font-medium text-gray-200 mb-3">
+          Paste URL to track
+        </label>
+        <input
+          type="url"
+          name="url"
+          placeholder="https://example.com"
+          id="url-input"
+        />
       </div>
 
-      <!-- Form – glassmorphism card -->
-      <div class="glass rounded-2xl p-8 md:p-12 shadow-2xl shadow-black/40 border border-slate-700/30 backdrop-blur-xl max-w-2xl mx-auto">
-        <form action="/create" method="POST" enctype="multipart/form-data" class="space-y-8">
-
-          <!-- URL input -->
-          <div class="space-y-3">
-            <label for="url" class="block text-left text-lg font-medium text-slate-200">
-              Paste a URL to track
-            </label>
-            <input
-              type="url"
-              id="url"
-              name="url"
-              placeholder="https://example.com/secret-page"
-              class="w-full px-5 py-4 bg-slate-900/60 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition shadow-inner"
-              required
-            />
-          </div>
-
-          <!-- Divider -->
-          <div class="relative py-2">
-            <div class="absolute inset-0 flex items-center">
-              <div class="w-full border-t border-slate-600/50"></div>
-            </div>
-            <div class="relative flex justify-center text-sm">
-              <span class="px-4 bg-slate-900/80 text-slate-400 rounded-full">or</span>
-            </div>
-          </div>
-
-          <!-- Image upload -->
-          <div class="space-y-3">
-            <label for="image" class="block text-left text-lg font-medium text-slate-200">
-              Or upload an image to track views
-            </label>
-            <div class="flex items-center justify-center w-full">
-              <label class="flex flex-col w-full h-48 border-2 border-dashed border-slate-600 hover:border-cyan-500 rounded-xl cursor-pointer transition group bg-slate-900/40 hover:bg-slate-800/40">
-                <div class="flex flex-col items-center justify-center pt-10">
-                  <svg class="w-12 h-12 text-slate-400 group-hover:text-cyan-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <p class="pt-3 text-sm text-slate-400 group-hover:text-cyan-300">
-                    <span class="font-semibold">Click to upload</span> or drag & drop
-                  </p>
-                  <p class="text-xs text-slate-500">PNG, JPG, GIF up to 10MB</p>
-                </div>
-                <input id="image" name="image" type="file" accept="image/*" class="hidden" />
-              </label>
-            </div>
-          </div>
-
-          <!-- Submit button -->
-          <button
-            type="submit"
-            class="w-full py-5 px-8 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold text-xl rounded-xl shadow-lg shadow-cyan-500/30 hover:shadow-cyan-600/50 transform hover:scale-[1.02] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50"
-          >
-            Generate Tracking Link
-          </button>
-
-        </form>
+      <!-- OR divider -->
+      <div class="or-divider">
+        <span class="relative z-10 px-5 py-1 bg-gray-900 text-gray-400 text-sm rounded-full">
+          or
+        </span>
       </div>
 
-      <!-- Trust / features bar -->
-      <div class="flex flex-wrap justify-center gap-8 text-sm text-slate-400">
-        <div class="flex items-center gap-2">
-          <svg class="w-5 h-5 text-cyan-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-          No registration
-        </div>
-        <div class="flex items-center gap-2">
-          <svg class="w-5 h-5 text-cyan-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-          Instant results
-        </div>
-        <div class="flex items-center gap-2">
-          <svg class="w-5 h-5 text-cyan-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-          Privacy-focused logging
-        </div>
+      <!-- Modern file upload zone -->
+      <div class="mb-8">
+        <label class="block text-lg font-medium text-gray-200 mb-3">
+          Or upload an image
+        </label>
+
+        <label class="upload-zone" id="upload-label">
+          <input
+            type="file"
+            name="image"
+            accept="image/*"
+            id="image-input"
+            class="hidden"
+          />
+
+          <div class="flex flex-col items-center justify-center py-8">
+            <svg class="w-12 h-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+
+            <p class="text-gray-300 font-medium text-lg">
+              Click to select or drag & drop image here
+            </p>
+            <p class="text-sm text-gray-500 mt-2">
+              PNG, JPG, GIF • max 10 MB
+            </p>
+
+            <p id="file-name" class="mt-4 text-sm text-cyan-400 hidden"></p>
+          </div>
+        </label>
       </div>
 
-    </div>
-  </main>
+      <!-- Error message area -->
+      <div id="error-message"></div>
 
-  <!-- Footer -->
-  <footer class="py-8 text-center text-slate-500 text-sm border-t border-slate-800/50">
-    © 2026 TrackLink – For educational & ethical use only
-  </footer>
+      <!-- Submit button -->
+      <button type="submit" id="submit-btn" disabled>
+        Generate Tracking Link
+      </button>
 
-  <!-- Dark mode toggle script -->
+    </form>
+  </div>
+
+  <p class="mt-10 text-sm text-gray-500">
+    No sign-up • Instant • Use responsibly
+  </p>
+
+  <!-- Lightweight JS: validation + visual feedback (does NOT block native submit) -->
   <script>
-    const toggle = document.getElementById('theme-toggle');
-    const sun = document.getElementById('sun');
-    const moon = document.getElementById('moon');
+    const form = document.getElementById('track-form');
+    const urlInput = document.getElementById('url-input');
+    const imageInput = document.getElementById('image-input');
+    const submitBtn = document.getElementById('submit-btn');
+    const errorMsg = document.getElementById('error-message');
+    const fileNameDisplay = document.getElementById('file-name');
+    const uploadLabel = document.getElementById('upload-label');
 
-    // Check system preference on load
-    if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      document.documentElement.classList.add('dark');
-      moon.classList.remove('hidden');
-      sun.classList.add('hidden');
-    } else {
-      document.documentElement.classList.remove('dark');
-      sun.classList.remove('hidden');
-      moon.classList.add('hidden');
+    // Enable/disable submit button based on input
+    function checkInputs() {
+      const hasUrl = urlInput.value.trim().length > 0;
+      const hasImage = imageInput.files.length > 0;
+
+      submitBtn.disabled = !(hasUrl || hasImage);
+
+      if (hasUrl || hasImage) {
+        errorMsg.textContent = '';
+      }
     }
 
-    toggle.addEventListener('click', () => {
-      document.documentElement.classList.toggle('dark');
-      if (document.documentElement.classList.contains('dark')) {
-        localStorage.theme = 'dark';
-        moon.classList.remove('hidden');
-        sun.classList.add('hidden');
+    // Update UI on change
+    urlInput.addEventListener('input', checkInputs);
+    imageInput.addEventListener('change', () => {
+      checkInputs();
+      if (imageInput.files.length > 0) {
+        fileNameDisplay.textContent = imageInput.files[0].name;
+        fileNameDisplay.classList.remove('hidden');
+        uploadLabel.classList.add('active');
       } else {
-        localStorage.theme = 'light';
-        sun.classList.remove('hidden');
-        moon.classList.add('hidden');
+        fileNameDisplay.classList.add('hidden');
+        uploadLabel.classList.remove('active');
       }
+    });
+
+    // Drag & drop visual feedback
+    ['dragenter', 'dragover'].forEach(eventName => {
+      uploadLabel.addEventListener(eventName, e => {
+        e.preventDefault();
+        uploadLabel.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      uploadLabel.addEventListener(eventName, e => {
+        e.preventDefault();
+        uploadLabel.classList.remove('dragover');
+      });
+    });
+
+    uploadLabel.addEventListener('drop', e => {
+      if (e.dataTransfer.files.length > 0) {
+        imageInput.files = e.dataTransfer.files;
+        imageInput.dispatchEvent(new Event('change'));
+      }
+    });
+
+    // Optional: show error if user tries to submit with empty fields
+    // (native browser validation may catch it, but we make it nicer)
+    form.addEventListener('submit', e => {
+      const hasUrl = urlInput.value.trim().length > 0;
+      const hasImage = imageInput.files.length > 0;
+
+      if (!hasUrl && !hasImage) {
+        e.preventDefault(); // only block here if truly empty
+        errorMsg.textContent = 'Please provide a URL or upload an image';
+        return;
+      }
+
+      // If valid → let native submit proceed
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Creating...';
+      errorMsg.textContent = '';
     });
   </script>
 
