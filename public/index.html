@@ -1,276 +1,273 @@
 <!DOCTYPE html>
-<html lang="en" class="scroll-smooth">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>TrackLink – Invisible Trackers</title>
+  <title>track</title>
 
-  <!-- Tailwind CSS via CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+    }
+
     body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-      color: white;
+      font-family: 'IBM Plex Mono', monospace;
+      background: #000;
+      color: #eee;
       min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 2vh 5vw;
+      overflow-y: hidden; /* prevent scroll on small screens */
+    }
+
+    header {
+      font-size: clamp(2.5rem, 9vw, 5.5rem);
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      line-height: 0.9;
+      text-align: center;
+      margin-bottom: 0.8vh;
+    }
+
+    .subtitle {
+      font-size: clamp(0.9rem, 2.8vw, 1.2rem);
+      color: #555;
+      text-align: center;
+      margin-bottom: 3vh;
+    }
+
+    form {
+      width: 100%;
+      max-width: 540px;
+      display: flex;
+      flex-direction: column;
+      gap: 2vh;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6vh;
+    }
+
+    .field-label {
+      font-size: clamp(1.1rem, 3.2vw, 1.6rem);
+      font-weight: 600;
+      color: #0f0;
+    }
+
+    .url-input {
+      background: #000;
+      border: 2px solid #222;
+      color: #eee;
+      font-family: inherit;
+      font-size: clamp(1rem, 3vw, 1.25rem);
+      padding: 0.8rem 1rem;
+      width: 100%;
+      transition: border-color 0.15s;
+    }
+
+    .url-input:focus {
+      outline: none;
+      border-color: #0f0;
+    }
+
+    .url-input::placeholder {
+      color: #333;
+    }
+
+    .or {
+      text-align: center;
+      color: #333;
+      font-size: clamp(1rem, 3vw, 1.3rem);
+      margin: 0.8vh 0;
+    }
+
+    .drop-zone {
+      border: 2px dashed #222;
+      min-height: 110px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 2rem;
-    }
-
-    .card {
-      background: rgba(30, 41, 59, 0.65);
-      backdrop-filter: blur(16px);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 1.5rem;
-      padding: 2.5rem;
-      width: 100%;
-      max-width: 520px;
-      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7);
-    }
-
-    .upload-zone {
-      border: 2px dashed #475569;
-      border-radius: 1rem;
-      padding: 2.5rem 1rem;
       text-align: center;
+      gap: 0.6rem;
       transition: all 0.2s;
       cursor: pointer;
-    }
-
-    .upload-zone:hover,
-    .upload-zone:focus-within,
-    .upload-zone.active {
-      border-color: #22d3ee;
-      background: rgba(14, 165, 233, 0.05);
-    }
-
-    .upload-zone.dragover {
-      border-color: #06b6d4;
-      background: rgba(14, 165, 233, 0.15);
-      box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.2);
-    }
-
-    input[type="url"] {
-      background: rgba(15, 23, 42, 0.7);
-      border: 1px solid #475569;
-      color: white;
-      border-radius: 0.75rem;
       padding: 1rem;
-      width: 100%;
     }
 
-    input[type="url"]::placeholder {
-      color: #94a3b8;
+    .drop-zone:hover,
+    .drop-zone.dragover,
+    .drop-zone.has-file {
+      border-color: #0f0;
+      background: rgba(0, 255, 0, 0.015);
     }
 
-    button[type="submit"] {
-      background: linear-gradient(to right, #0ea5e9, #0284c7);
-      color: white;
-      font-weight: 600;
-      padding: 1.25rem;
-      border-radius: 0.75rem;
-      width: 100%;
-      transition: all 0.25s;
+    .drop-icon {
+      width: 1.8rem;
+      height: 1.8rem;
+      color: #444;
+      transition: color 0.2s;
     }
 
-    button[type="submit"]:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 25px -5px rgba(14, 165, 233, 0.4);
+    .drop-zone:hover .drop-icon,
+    .drop-zone.dragover .drop-icon,
+    .drop-zone.has-file .drop-icon {
+      color: #0f0;
+    }
+
+    .drop-text {
+      font-size: clamp(0.95rem, 2.8vw, 1.15rem);
+      font-weight: 500;
+    }
+
+    .drop-sub {
+      font-size: 0.8rem;
+      color: #444;
+    }
+
+    .file-name {
+      margin-top: 0.6rem;
+      font-size: 0.9rem;
+      color: #0f0;
+      word-break: break-all;
+      max-width: 95%;
+    }
+
+    button {
+      margin-top: 1.5vh;
+      background: #0f0;
+      color: #000;
+      font-family: inherit;
+      font-size: clamp(1rem, 3vw, 1.25rem);
+      font-weight: 700;
+      padding: 0.8rem 1.6rem;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      align-self: center;
+      min-width: 180px;
+    }
+
+    button:hover:not(:disabled) {
+      background: #00ff00;
+      transform: scale(1.03);
     }
 
     button:disabled {
-      background: #334155;
+      background: #111;
+      color: #333;
       cursor: not-allowed;
-      opacity: 0.6;
     }
 
-    .or-divider {
-      position: relative;
+    footer {
+      margin-top: 3vh;
+      font-size: 0.8rem;
+      color: #333;
       text-align: center;
-      margin: 1.75rem 0;
     }
 
-    .or-divider::before,
-    .or-divider::after {
-      content: '';
-      position: absolute;
-      top: 50%;
-      width: 42%;
-      height: 1px;
-      background: #475569;
-    }
-
-    .or-divider::before { left: 0; }
-    .or-divider::after  { right: 0; }
-
-    #error-message {
-      min-height: 1.25rem;
-      color: #f87171;
-      font-size: 0.875rem;
-      text-align: center;
+    @media (max-width: 480px) {
+      body {
+        padding: 3vh 6vw;
+      }
+      header {
+        font-size: clamp(2.2rem, 12vw, 4.5rem);
+      }
+      .drop-zone {
+        min-height: 100px;
+        padding: 0.8rem;
+      }
+      button {
+        padding: 0.7rem 1.4rem;
+        font-size: 1.1rem;
+      }
     }
   </style>
 </head>
 <body>
 
-  <div class="text-center mb-12">
-    <h1 class="text-5xl md:text-6xl font-bold tracking-tight bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-500 bg-clip-text text-transparent">
-      TrackLink
-    </h1>
-    <p class="mt-4 text-xl text-gray-300">
-      Short links that quietly show who clicked
-    </p>
-  </div>
+  <header>track</header>
+  <p class="subtitle">short links that expose everything</p>
 
-  <div class="card">
-    <form action="/create" method="POST" enctype="multipart/form-data" id="track-form">
+  <form action="/create" method="POST" enctype="multipart/form-data">
 
-      <!-- URL input -->
-      <div class="mb-8">
-        <label class="block text-lg font-medium text-gray-200 mb-3">
-          Paste URL to track
-        </label>
-        <input
-          type="url"
-          name="url"
-          placeholder="https://example.com"
-          id="url-input"
-        />
-      </div>
+    <div class="field">
+      <div class="field-label">URL</div>
+      <input type="url" name="url" placeholder="https://example.com" class="url-input" />
+    </div>
 
-      <!-- OR divider -->
-      <div class="or-divider">
-        <span class="relative z-10 px-5 py-1 bg-gray-900 text-gray-400 text-sm rounded-full">
-          or
-        </span>
-      </div>
+    <div class="or">or</div>
 
-      <!-- Modern file upload zone -->
-      <div class="mb-8">
-        <label class="block text-lg font-medium text-gray-200 mb-3">
-          Or upload an image
-        </label>
+    <div class="field">
+      <div class="field-label">IMAGE</div>
 
-        <label class="upload-zone" id="upload-label">
-          <input
-            type="file"
-            name="image"
-            accept="image/*"
-            id="image-input"
-            class="hidden"
-          />
+      <label class="drop-zone" id="dropzone">
+        <input type="file" name="image" accept="image/*" class="sr-only" id="file" />
 
-          <div class="flex flex-col items-center justify-center py-8">
-            <svg class="w-12 h-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
+        <svg class="drop-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M19 13v5H5v-5H3v7a2 2 0 002 2h14a2 2 0 002-2v-7h-2zm-7-1l5-5h-4V3H9v4H5l5 5z"/>
+        </svg>
 
-            <p class="text-gray-300 font-medium text-lg">
-              Click to select or drag & drop image here
-            </p>
-            <p class="text-sm text-gray-500 mt-2">
-              PNG, JPG, GIF • max 10 MB
-            </p>
+        <div class="drop-text">drop image or click</div>
+        <div class="drop-sub">PNG · JPG · GIF • max 10 MB</div>
 
-            <p id="file-name" class="mt-4 text-sm text-cyan-400 hidden"></p>
-          </div>
-        </label>
-      </div>
+        <div id="file-name" class="file-name"></div>
+      </label>
+    </div>
 
-      <!-- Error message area -->
-      <div id="error-message"></div>
+    <button type="submit" id="submit" disabled>generate link</button>
 
-      <!-- Submit button -->
-      <button type="submit" id="submit-btn" disabled>
-        Generate Tracking Link
-      </button>
+  </form>
 
-    </form>
-  </div>
+  <footer>ethical use only</footer>
 
-  <p class="mt-10 text-sm text-gray-500">
-    No sign-up • Instant • Use responsibly
-  </p>
-
-  <!-- Lightweight JS: validation + visual feedback (does NOT block native submit) -->
   <script>
-    const form = document.getElementById('track-form');
-    const urlInput = document.getElementById('url-input');
-    const imageInput = document.getElementById('image-input');
-    const submitBtn = document.getElementById('submit-btn');
-    const errorMsg = document.getElementById('error-message');
-    const fileNameDisplay = document.getElementById('file-name');
-    const uploadLabel = document.getElementById('upload-label');
+    const url = document.querySelector('input[name="url"]');
+    const fileInput = document.getElementById('file');
+    const dropzone = document.getElementById('dropzone');
+    const fileName = document.getElementById('file-name');
+    const submit = document.getElementById('submit');
 
-    // Enable/disable submit button based on input
-    function checkInputs() {
-      const hasUrl = urlInput.value.trim().length > 0;
-      const hasImage = imageInput.files.length > 0;
-
-      submitBtn.disabled = !(hasUrl || hasImage);
-
-      if (hasUrl || hasImage) {
-        errorMsg.textContent = '';
-      }
+    function check() {
+      submit.disabled = !(url.value.trim() || fileInput.files.length > 0);
     }
 
-    // Update UI on change
-    urlInput.addEventListener('input', checkInputs);
-    imageInput.addEventListener('change', () => {
-      checkInputs();
-      if (imageInput.files.length > 0) {
-        fileNameDisplay.textContent = imageInput.files[0].name;
-        fileNameDisplay.classList.remove('hidden');
-        uploadLabel.classList.add('active');
-      } else {
-        fileNameDisplay.classList.add('hidden');
-        uploadLabel.classList.remove('active');
+    url.addEventListener('input', check);
+    fileInput.addEventListener('change', () => {
+      check();
+      fileName.textContent = fileInput.files.length ? fileInput.files[0].name : '';
+    });
+
+    ['dragenter', 'dragover'].forEach(e => dropzone.addEventListener(e, ev => {
+      ev.preventDefault();
+      dropzone.classList.add('dragover');
+    }));
+
+    ['dragleave', 'drop'].forEach(e => dropzone.addEventListener(e, ev => {
+      ev.preventDefault();
+      dropzone.classList.remove('dragover');
+    }));
+
+    dropzone.addEventListener('drop', ev => {
+      if (ev.dataTransfer.files.length) {
+        fileInput.files = ev.dataTransfer.files;
+        fileInput.dispatchEvent(new Event('change'));
       }
-    });
-
-    // Drag & drop visual feedback
-    ['dragenter', 'dragover'].forEach(eventName => {
-      uploadLabel.addEventListener(eventName, e => {
-        e.preventDefault();
-        uploadLabel.classList.add('dragover');
-      });
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-      uploadLabel.addEventListener(eventName, e => {
-        e.preventDefault();
-        uploadLabel.classList.remove('dragover');
-      });
-    });
-
-    uploadLabel.addEventListener('drop', e => {
-      if (e.dataTransfer.files.length > 0) {
-        imageInput.files = e.dataTransfer.files;
-        imageInput.dispatchEvent(new Event('change'));
-      }
-    });
-
-    // Optional: show error if user tries to submit with empty fields
-    // (native browser validation may catch it, but we make it nicer)
-    form.addEventListener('submit', e => {
-      const hasUrl = urlInput.value.trim().length > 0;
-      const hasImage = imageInput.files.length > 0;
-
-      if (!hasUrl && !hasImage) {
-        e.preventDefault(); // only block here if truly empty
-        errorMsg.textContent = 'Please provide a URL or upload an image';
-        return;
-      }
-
-      // If valid → let native submit proceed
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Creating...';
-      errorMsg.textContent = '';
     });
   </script>
 
