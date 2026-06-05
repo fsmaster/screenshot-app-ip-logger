@@ -1,10 +1,17 @@
 // app.js
-// HTTPS Express server for URL/image tracking / IP logger
-// Reads Let's Encrypt certificates directly from standard Certbot paths
-// No symlinks or custom certs/ folder required in project
+// Express server for URL/image tracking / IP logger.
+//
+// Two run modes:
+//   1. Standalone HTTPS (default) — binds 443 and reads Let's Encrypt certs directly.
+//   2. Reverse-proxy / HTTP — set HTTP_PORT to run plain HTTP on localhost behind
+//      nginx/Apache (which terminates TLS). No certs are read in this mode.
+//
+// Visitor geolocation (country / region / city / coordinates) is resolved per visit
+// and rendered on the tracking page together with an interactive map.
 
 const express     = require('express');
 const https       = require('https');
+const http        = require('http');
 const fs          = require('fs');
 const multer      = require('multer');
 const sqlite3     = require('sqlite3').verbose();
@@ -13,17 +20,23 @@ const bodyParser  = require('body-parser');
 const path        = require('path');
 
 const app = express();
-const PORT = 443;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Configuration
+// Configuration (env-overridable)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const HOSTNAME = 'scerenshot.app';           // ← change domain here if needed
-const BASE_URL = `https://${HOSTNAME}`;
+// NOTE: do not read process.env.HOSTNAME — on Linux that is the machine hostname.
+const APP_DOMAIN  = process.env.APP_DOMAIN  || 'scerenshot.app';
+const BASE_URL    = process.env.BASE_URL    || `https://${APP_DOMAIN}`;
+const CERT_DOMAIN = process.env.CERT_DOMAIN || APP_DOMAIN;
 
-// Domain used for certificate paths (usually same as HOSTNAME)
-const CERT_DOMAIN = 'scerenshot.app';
+// If HTTP_PORT is set we run plain HTTP on localhost behind a reverse proxy.
+const HTTP_PORT   = process.env.HTTP_PORT ? parseInt(process.env.HTTP_PORT, 10) : null;
+const HTTPS_PORT  = process.env.PORT ? parseInt(process.env.PORT, 10) : 443;
+const BIND_ADDR   = process.env.BIND_ADDR || (HTTP_PORT ? '127.0.0.1' : '0.0.0.0');
+
+// Trust X-Forwarded-* so req.ip reflects the real client behind a proxy.
+app.set('trust proxy', true);
 
 // View engine setup (EJS for tracking page)
 app.set('view engine', 'ejs');
@@ -38,14 +51,8 @@ app.use(express.static('public'));
 // ─────────────────────────────────────────────────────────────────────────────
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'public/uploads/');
-  },
-  filename: (req, file, cb) => {
-    // Unique filename: timestamp + original extension
-    const ext = path.extname(file.originalname);
-    cb(null, Date.now() + ext);
-  }
+  destination: (req, file, cb) => cb(null, 'public/uploads/'),
+  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
 });
 
 const upload = multer({ storage });
@@ -75,23 +82,115 @@ db.serialize(() => {
 
   db.run(`
     CREATE TABLE IF NOT EXISTS visits (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      link_id     INTEGER NOT NULL,
-      ip          TEXT NOT NULL,
-      user_agent  TEXT,
-      accept_lang TEXT,
-      visited_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      link_id      INTEGER NOT NULL,
+      ip           TEXT NOT NULL,
+      user_agent   TEXT,
+      accept_lang  TEXT,
+      country      TEXT,
+      country_code TEXT,
+      region       TEXT,
+      city         TEXT,
+      lat          REAL,
+      lon          REAL,
+      org          TEXT,
+      visited_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (link_id) REFERENCES links(id)
     )
   `);
+
+  // Migrate older databases that predate the geolocation columns.
+  db.all(`PRAGMA table_info(visits)`, (err, cols) => {
+    if (err || !cols) return;
+    const have = new Set(cols.map(c => c.name));
+    const wanted = [
+      ['country', 'TEXT'], ['country_code', 'TEXT'], ['region', 'TEXT'],
+      ['city', 'TEXT'], ['lat', 'REAL'], ['lon', 'REAL'], ['org', 'TEXT'],
+    ];
+    wanted.forEach(([name, type]) => {
+      if (!have.has(name)) db.run(`ALTER TABLE visits ADD COLUMN ${name} ${type}`);
+    });
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helper: generate 6-character hex code
+// Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 function randomCode() {
   return crypto.randomBytes(3).toString('hex');
+}
+
+// Normalise an IP for lookup (strip IPv4-mapped IPv6 prefix).
+function normaliseIp(ip) {
+  return (ip || '').replace(/^::ffff:/i, '').trim();
+}
+
+// True for addresses that cannot be geolocated (loopback / private ranges).
+function isPrivateIp(ip) {
+  if (!ip) return true;
+  if (ip === '127.0.0.1' || ip === '::1') return true;
+  if (/^10\./.test(ip)) return true;
+  if (/^192\.168\./.test(ip)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true;
+  if (/^(fc|fd)/i.test(ip)) return true; // unique-local IPv6
+  return false;
+}
+
+// Resolve geolocation via ipwho.is (free, HTTPS, no API key).
+// Always resolves (null on any failure) so a lookup never blocks logging.
+function lookupGeo(ip) {
+  return new Promise((resolve) => {
+    const clean = normaliseIp(ip);
+    if (isPrivateIp(clean)) return resolve(null);
+
+    const url = `https://ipwho.is/${encodeURIComponent(clean)}` +
+                `?fields=success,country,country_code,region,city,latitude,longitude,connection`;
+
+    const req = https.get(url, { timeout: 4000 }, (r) => {
+      let data = '';
+      r.on('data', (c) => (data += c));
+      r.on('end', () => {
+        try {
+          const j = JSON.parse(data);
+          resolve(j && j.success ? j : null);
+        } catch {
+          resolve(null);
+        }
+      });
+    });
+    req.on('timeout', () => req.destroy());
+    req.on('error', () => resolve(null));
+  });
+}
+
+// Log a visit immediately, then enrich it with geolocation asynchronously so the
+// visitor's redirect/image is never delayed by the external lookup.
+function logVisit(linkId, req) {
+  const ip = normaliseIp(
+    req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || req.socket.remoteAddress
+  );
+  const ua   = req.get('User-Agent') || null;
+  const lang = req.get('Accept-Language') || null;
+
+  db.run(
+    `INSERT INTO visits (link_id, ip, user_agent, accept_lang) VALUES (?, ?, ?, ?)`,
+    [linkId, ip, ua, lang],
+    function (err) {
+      if (err || !this.lastID) return;
+      const visitId = this.lastID;
+      lookupGeo(ip).then((g) => {
+        if (!g) return;
+        const org = g.connection?.org || g.connection?.isp || null;
+        db.run(
+          `UPDATE visits
+             SET country=?, country_code=?, region=?, city=?, lat=?, lon=?, org=?
+           WHERE id=?`,
+          [g.country, g.country_code, g.region, g.city, g.latitude, g.longitude, org, visitId]
+        );
+      });
+    }
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -159,13 +258,7 @@ app.get('/:code', (req, res) => {
       return res.status(404).send('Link not found');
     }
 
-    // Log visitor information
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
-    db.run(
-      `INSERT INTO visits (link_id, ip, user_agent, accept_lang)
-       VALUES (?, ?, ?, ?)`,
-      [row.id, ip, req.get('User-Agent'), req.get('Accept-Language')]
-    );
+    logVisit(row.id, req);
 
     if (row.type === 'url') {
       res.redirect(row.target);
@@ -190,7 +283,8 @@ app.get('/track/:track', (req, res) => {
     }
 
     db.all(
-      `SELECT ip, user_agent, accept_lang, visited_at
+      `SELECT ip, user_agent, accept_lang, visited_at,
+              country, country_code, region, city, lat, lon, org
        FROM visits WHERE link_id = ? ORDER BY visited_at DESC`,
       [row.id],
       (err, rows) => {
@@ -206,23 +300,27 @@ app.get('/track/:track', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HTTPS Server – load certs directly from Certbot location
+// Server start
 // ─────────────────────────────────────────────────────────────────────────────
 
-const options = {
-  key:  fs.readFileSync(`/etc/letsencrypt/live/${CERT_DOMAIN}/privkey.pem`),
-  cert: fs.readFileSync(`/etc/letsencrypt/live/${CERT_DOMAIN}/fullchain.pem`),
-  // ca:   fs.readFileSync(`/etc/letsencrypt/live/${CERT_DOMAIN}/chain.pem`), // usually not needed
-};
+if (HTTP_PORT) {
+  // Behind a reverse proxy: plain HTTP on localhost, TLS handled upstream.
+  http.createServer(app).listen(HTTP_PORT, BIND_ADDR, () => {
+    console.log(`Server running (HTTP) at http://${BIND_ADDR}:${HTTP_PORT} — public ${BASE_URL}`);
+  });
+} else {
+  // Standalone HTTPS using Let's Encrypt certs.
+  const options = {
+    key:  fs.readFileSync(`/etc/letsencrypt/live/${CERT_DOMAIN}/privkey.pem`),
+    cert: fs.readFileSync(`/etc/letsencrypt/live/${CERT_DOMAIN}/fullchain.pem`),
+  };
+  https.createServer(options, app).listen(HTTPS_PORT, BIND_ADDR, () => {
+    console.log(`Server running (HTTPS) at ${BASE_URL}`);
+  });
+}
 
-https.createServer(options, app).listen(PORT, () => {
-  console.log(`Server running at ${BASE_URL}`);
-});
-
-// Graceful shutdown (optional but good practice)
+// Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM received – shutting down gracefully');
-  db.close(() => {
-    process.exit(0);
-  });
+  db.close(() => process.exit(0));
 });

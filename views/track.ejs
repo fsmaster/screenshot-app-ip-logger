@@ -2,38 +2,132 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tracking Statistics</title>
+
+  <!-- Leaflet (OpenStreetMap) — no API key required -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
   <style>
-    body { font-family: system-ui, sans-serif; margin: 2rem; background: #f8fafc; }
-    h1 { color: #1e40af; }
-    table { width:100%; border-collapse: collapse; margin-top:1.5rem; background:white; box-shadow:0 2px 8px rgba(0,0,0,0.1); }
-    th, td { padding: 0.9rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
-    th { background: #eff6ff; }
-    tr:hover { background: #f1f5f9; }
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      margin: 0; padding: 2rem; background: #0a0a0a; color: #e6e6e6;
+    }
+    h1 { color: #22c55e; font-size: 1.6rem; letter-spacing: -0.02em; margin: 0 0 0.25rem; }
+    .sub { color: #555; font-size: 0.85rem; margin-bottom: 1.5rem; }
+    .count { color: #22c55e; }
+
+    #map {
+      height: 380px; width: 100%; border-radius: 10px; margin-bottom: 1.5rem;
+      border: 1px solid #1f2937; background: #111;
+    }
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #111; color: #e6e6e6; }
+    .leaflet-popup-content { font-family: inherit; font-size: 0.8rem; }
+
+    table {
+      width: 100%; border-collapse: collapse; background: #0d0d0d;
+      border: 1px solid #1f2937; border-radius: 10px; overflow: hidden; font-size: 0.85rem;
+    }
+    th, td { padding: 0.7rem 0.85rem; text-align: left; border-bottom: 1px solid #161b22; vertical-align: top; }
+    th { background: #0f1722; color: #9ca3af; font-weight: 600; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05em; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #0f1722; }
+    .ip { color: #22c55e; font-weight: 600; }
+    .muted { color: #4b5563; }
+    .ua { max-width: 320px; color: #9ca3af; font-size: 0.78rem; word-break: break-word; }
+    .flag { font-size: 1rem; margin-right: 0.35rem; }
+    .empty { color: #6b7280; padding: 2rem 0; }
+    a { color: #22c55e; }
   </style>
 </head>
 <body>
-  <h1>Visits</h1>
+  <h1>visits</h1>
+  <div class="sub">total: <span class="count"><%= visits.length %></span> · short links that expose everything</div>
+
+  <% const located = visits.filter(v => v.lat != null && v.lon != null); %>
+
+  <% if (located.length > 0) { %>
+    <div id="map"></div>
+  <% } %>
 
   <% if (visits.length === 0) { %>
-    <p>No visits yet.</p>
+    <p class="empty">No visits yet.</p>
   <% } else { %>
     <table>
-      <tr>
-        <th>Time</th>
-        <th>IP</th>
-        <th>User-Agent</th>
-        <th>Language</th>
-      </tr>
-      <% visits.forEach(v => { %>
+      <thead>
         <tr>
-          <td><%= new Date(v.visited_at).toLocaleString() %></td>
-          <td><%= v.ip %></td>
-          <td><%= v.user_agent || '—' %></td>
-          <td><%= v.accept_lang || '—' %></td>
+          <th>Time</th>
+          <th>IP</th>
+          <th>Location</th>
+          <th>Org / ISP</th>
+          <th>User-Agent</th>
+          <th>Lang</th>
+        </tr>
+      </thead>
+      <tbody>
+      <% visits.forEach(v => {
+           const cc = (v.country_code || '').toUpperCase();
+           const flag = cc.length === 2
+             ? String.fromCodePoint(...[...cc].map(c => 0x1F1E6 + c.charCodeAt(0) - 65))
+             : '';
+           const place = [v.city, v.region, v.country].filter(Boolean).join(', ');
+      %>
+        <tr>
+          <td><%= new Date(v.visited_at + 'Z').toLocaleString() %></td>
+          <td class="ip"><%= v.ip %></td>
+          <td>
+            <% if (place) { %>
+              <span class="flag"><%= flag %></span><%= place %>
+            <% } else { %>
+              <span class="muted">— unknown —</span>
+            <% } %>
+          </td>
+          <td><%= v.org || '—' %></td>
+          <td class="ua"><%= v.user_agent || '—' %></td>
+          <td><%= (v.accept_lang || '—').split(',')[0] %></td>
         </tr>
       <% }) %>
+      </tbody>
     </table>
+  <% } %>
+
+  <% if (located.length > 0) { %>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+      // Visit points with coordinates, serialised from the server.
+      const points = <%- JSON.stringify(located.map(v => ({
+        lat: v.lat, lon: v.lon, ip: v.ip,
+        place: [v.city, v.region, v.country].filter(Boolean).join(', '),
+        org: v.org || '', time: v.visited_at
+      }))) %>;
+
+      const map = L.map('map');
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO',
+        maxZoom: 19, subdomains: 'abcd'
+      }).addTo(map);
+
+      const markers = points.map(p => {
+        const m = L.circleMarker([p.lat, p.lon], {
+          radius: 7, color: '#22c55e', weight: 2, fillColor: '#22c55e', fillOpacity: 0.45
+        }).addTo(map);
+        m.bindPopup(
+          '<b>' + p.ip + '</b><br>' +
+          (p.place ? p.place + '<br>' : '') +
+          (p.org ? '<span style="color:#9ca3af">' + p.org + '</span><br>' : '') +
+          '<span style="color:#6b7280">' + new Date(p.time + 'Z').toLocaleString() + '</span>'
+        );
+        return m;
+      });
+
+      if (markers.length === 1) {
+        map.setView(markers[0].getLatLng(), 6);
+      } else {
+        map.fitBounds(L.featureGroup(markers).getBounds().pad(0.25));
+      }
+    </script>
   <% } %>
 </body>
 </html>

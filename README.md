@@ -9,11 +9,12 @@ This tool logs personal data (IP addresses, browser details). Use responsibly an
 
 - Modern landing page with URL input or image upload
 - Generates two links:
-  - Short link (`https://scereneshot.app/xxxxxx`) → redirects to URL or serves image + logs visitor
-  - Tracking link (`https://scereneshot.app/track/yyyyyy`) → shows list of visits
+  - Short link (`https://scerenshot.app/xxxxxx`) → redirects to URL or serves image + logs visitor
+  - Tracking link (`https://scerenshot.app/track/yyyyyy`) → shows list of visits
+- **Visitor geolocation**: each visit is resolved to country / region / city / ISP and
+  plotted on an interactive map (Leaflet + OpenStreetMap, no API key)
 - Stores data in SQLite (`tracker.db`)
-- Runs directly on HTTPS port 443 with Let's Encrypt certificates
-- No reverse proxy required (no Nginx/Apache needed)
+- Runs standalone on HTTPS 443, **or** behind a reverse proxy (nginx/Apache)
 
 ## Requirements
 
@@ -58,11 +59,54 @@ chmod 755 public/uploads
 
 # 8. Get Let's Encrypt certificate
 sudo certbot certonly --standalone \
-  -d scereneshot.app \
-  --non-interactive --agree-tos --email your@email.com
+  -d scerenshot.app \
+  --non-interactive --agree-tos --email igor@fsmaster.com
 
 # 9. Install & start with PM2 (runs as root to bind port 443)
 sudo npm install -g pm2
 sudo pm2 start app.js --name screenshot-app
 sudo pm2 save
 sudo pm2 startup   # run the exact command printed here
+```
+
+
+## Running behind a reverse proxy (recommended when sharing the host)
+
+If port 443 is already in use by another site on the same server, run the app in
+HTTP mode on localhost and let nginx terminate TLS:
+
+```bash
+# Start the app on an internal port (no certs are read in this mode)
+HTTP_PORT=3001 APP_DOMAIN=scerenshot.app node app.js
+```
+
+Environment variables:
+
+| Variable      | Default               | Purpose                                              |
+|---------------|-----------------------|------------------------------------------------------|
+| `HTTP_PORT`   | _(unset)_             | If set, run plain HTTP on `BIND_ADDR` behind a proxy |
+| `BIND_ADDR`   | `127.0.0.1` (HTTP)    | Interface to bind                                    |
+| `APP_DOMAIN`  | `scerenshot.app`      | Public domain used to build share links              |
+| `BASE_URL`    | `https://$APP_DOMAIN` | Override the full public base URL                    |
+| `CERT_DOMAIN` | `$APP_DOMAIN`         | Cert directory name (standalone HTTPS mode only)     |
+
+Example nginx server block proxying to the app:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name scerenshot.app www.scerenshot.app;
+    ssl_certificate     /etc/letsencrypt/live/scerenshot.app/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/scerenshot.app/privkey.pem;
+
+    client_max_body_size 12M;   # allow image uploads
+
+    location / {
+        proxy_pass       http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
