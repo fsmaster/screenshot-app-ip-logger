@@ -11,6 +11,11 @@ This tool logs personal data (IP addresses, browser details). Use responsibly an
 - Generates two links:
   - Short link (`https://scerenshot.app/xxxxxx`) → redirects to URL or serves image + logs visitor
   - Tracking link (`https://scerenshot.app/track/yyyyyy`) → shows list of visits
+- **Blur teaser** (images): tick the **Blur** checkbox when uploading to serve a
+  pixelated, blurred preview behind a "View full resolution" call-to-action. The
+  visitor is logged on open; the crisp original loads when they click. Pixelation
+  is generated once at upload with [jimp](https://www.npmjs.com/package/jimp)
+  (squash to 80&nbsp;px wide, nearest-neighbour upscale).
 - **Visitor geolocation**: each visit is resolved to country / region / city / ISP and
   plotted on an interactive map (Leaflet + OpenStreetMap, no API key)
 - Stores data in SQLite (`tracker.db`)
