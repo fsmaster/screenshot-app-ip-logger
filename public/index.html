@@ -148,6 +148,58 @@
       max-width: 95%;
     }
 
+    .blur-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.7rem;
+      margin-top: 1rem;
+      padding: 0.7rem 0.9rem;
+      border: 2px solid #222;
+      cursor: pointer;
+      opacity: 0.4;
+      pointer-events: none;
+      transition: all 0.2s;
+    }
+    .blur-option.enabled {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .blur-option input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .blur-box {
+      flex: 0 0 auto;
+      width: 1.15rem;
+      height: 1.15rem;
+      margin-top: 0.15rem;
+      border: 2px solid #444;
+      transition: all 0.15s;
+      position: relative;
+    }
+    .blur-option:hover .blur-box { border-color: #0f0; }
+    .blur-option input:checked + .blur-box {
+      background: #0f0;
+      border-color: #0f0;
+    }
+    .blur-option input:checked + .blur-box::after {
+      content: '';
+      position: absolute;
+      left: 3px;
+      top: 0px;
+      width: 5px;
+      height: 9px;
+      border: solid #000;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+    }
+    .blur-text { display: flex; flex-direction: column; gap: 0.15rem; }
+    .blur-title { font-size: 0.95rem; font-weight: 600; color: #eee; }
+    .blur-option input:checked ~ .blur-text .blur-title { color: #0f0; }
+    .blur-sub { font-size: 0.75rem; color: #555; }
+
     button {
       margin-top: 1.5vh;
       background: #0f0;
@@ -228,6 +280,15 @@
 
         <div id="file-name" class="file-name"></div>
       </label>
+
+      <label class="blur-option" id="blur-option">
+        <input type="checkbox" name="blur" id="blur" />
+        <span class="blur-box"></span>
+        <span class="blur-text">
+          <span class="blur-title">Blur preview</span>
+          <span class="blur-sub">show a pixelated teaser — "click to view full resolution"</span>
+        </span>
+      </label>
     </div>
 
     <button type="submit" id="submit" disabled>generate link</button>
@@ -242,9 +303,15 @@
     const dropzone = document.getElementById('dropzone');
     const fileName = document.getElementById('file-name');
     const submit = document.getElementById('submit');
+    const blurOption = document.getElementById('blur-option');
+    const blur = document.getElementById('blur');
 
     function check() {
-      submit.disabled = !(url.value.trim() || fileInput.files.length > 0);
+      const hasFile = fileInput.files.length > 0;
+      submit.disabled = !(url.value.trim() || hasFile);
+      // Blur only makes sense for images.
+      blurOption.classList.toggle('enabled', hasFile);
+      if (!hasFile) blur.checked = false;
     }
 
     url.addEventListener('input', check);

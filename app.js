@@ -18,6 +18,7 @@ const sqlite3     = require('sqlite3').verbose();
 const crypto      = require('crypto');
 const bodyParser  = require('body-parser');
 const path        = require('path');
+const Jimp        = require('jimp');
 
 const app = express();
 
@@ -76,9 +77,18 @@ db.serialize(() => {
       code       TEXT UNIQUE NOT NULL,
       track_code TEXT UNIQUE NOT NULL,
       type       TEXT NOT NULL CHECK(type IN ('url', 'image')),
-      target     TEXT NOT NULL
+      target     TEXT NOT NULL,
+      blur       INTEGER NOT NULL DEFAULT 0
     )
   `);
+
+  // Migrate older databases that predate the blur column.
+  db.all(`PRAGMA table_info(links)`, (err, cols) => {
+    if (err || !cols) return;
+    if (!cols.some(c => c.name === 'blur')) {
+      db.run(`ALTER TABLE links ADD COLUMN blur INTEGER NOT NULL DEFAULT 0`);
+    }
+  });
 
   db.run(`
     CREATE TABLE IF NOT EXISTS visits (
@@ -119,6 +129,42 @@ db.serialize(() => {
 
 function randomCode() {
   return crypto.randomBytes(3).toString('hex');
+}
+
+// Width (px) the image is squashed down to before being blown back up. The
+// smaller this is, the chunkier / more unrecognisable the pixelation.
+const BLUR_WIDTH = 80;
+
+// Derive the on-disk name of an image's blurred sibling: "1720000000.png" -> "1720000000.blur.png".
+function blurFilename(filename) {
+  const ext = path.extname(filename);
+  return filename.slice(0, filename.length - ext.length) + '.blur' + ext;
+}
+
+// Produce a heavily-pixelated, softly-blurred copy of an uploaded image so the
+// short link renders a teasing low-res preview that begs to be clicked for the
+// full-resolution original. Squash to BLUR_WIDTH px wide, blow it back up with
+// nearest-neighbour sampling (hard mosaic), then a light gaussian to blend the
+// blocks into a "can't-quite-make-it-out" haze. Resolves true on success.
+async function makeBlur(srcPath, destPath) {
+  try {
+    const img = await Jimp.read(srcPath);
+    const w = img.bitmap.width;
+    const h = img.bitmap.height;
+    const tw = Math.max(1, BLUR_WIDTH);
+    const th = Math.max(1, Math.round((h * tw) / w));
+
+    img
+      .resize(tw, th)                                  // squash to a tiny thumbnail
+      .resize(w, h, Jimp.RESIZE_NEAREST_NEIGHBOR)      // blow back up -> crisp blocky mosaic
+      .blur(1);                                        // 1px to kill hard aliasing only
+
+    await img.writeAsync(destPath);
+    return true;
+  } catch (e) {
+    console.error('Blur generation failed:', e.message);
+    return false;
+  }
 }
 
 // Normalise an IP for lookup (strip IPv4-mapped IPv6 prefix).
@@ -203,9 +249,11 @@ app.get('/', (req, res) => {
 });
 
 // Create new tracking link
-app.post('/create', upload.single('image'), (req, res) => {
+app.post('/create', upload.single('image'), async (req, res) => {
   const { url } = req.body;
   const file    = req.file;
+  // Blur only applies to images. Checkbox arrives as "on" when ticked.
+  const wantBlur = !!file && (req.body.blur === 'on' || req.body.blur === '1' || req.body.blur === 'true');
 
   let type, target;
 
@@ -224,12 +272,21 @@ app.post('/create', upload.single('image'), (req, res) => {
     return res.status(400).send('Provide a URL or upload an image');
   }
 
+  // Pre-generate the pixelated preview so serving is instant. If generation
+  // fails we silently fall back to a normal (unblurred) link.
+  let blur = 0;
+  if (wantBlur) {
+    const srcPath  = path.join(__dirname, 'public/uploads', target);
+    const destPath = path.join(__dirname, 'public/uploads', blurFilename(target));
+    blur = (await makeBlur(srcPath, destPath)) ? 1 : 0;
+  }
+
   const code      = randomCode();
   const trackCode = randomCode();
 
   db.run(
-    `INSERT INTO links (code, track_code, type, target) VALUES (?, ?, ?, ?)`,
-    [code, trackCode, type, target],
+    `INSERT INTO links (code, track_code, type, target, blur) VALUES (?, ?, ?, ?, ?)`,
+    [code, trackCode, type, target, blur],
     function (err) {
       if (err) {
         console.error('Database insert failed:', err.message);
@@ -238,7 +295,7 @@ app.post('/create', upload.single('image'), (req, res) => {
 
       res.send(`
         <h2>Success!</h2>
-        <p>Share link: <strong><a href="${BASE_URL}/${code}">${BASE_URL}/${code}</a></strong></p>
+        <p>Share link: <strong><a href="${BASE_URL}/${code}">${BASE_URL}/${code}</a></strong>${blur ? ' <em>(blurred preview)</em>' : ''}</p>
         <p>Track visits: <strong><a href="${BASE_URL}/track/${trackCode}">${BASE_URL}/track/${trackCode}</a></strong></p>
       `);
     }
@@ -258,12 +315,33 @@ app.get('/:code', (req, res) => {
       return res.status(404).send('Link not found');
     }
 
+    const uploads = path.join(__dirname, 'public/uploads');
+
+    // Sub-resources requested by the blurred preview page (?img=blur|full).
+    // These are already-counted parts of a logged view, so they do NOT log again.
+    if (row.type === 'image' && (req.query.img === 'blur' || req.query.img === 'full')) {
+      const blurPath = path.join(uploads, blurFilename(row.target));
+      const fullPath = path.join(uploads, row.target);
+      // Fall back to the full image if a blurred copy is somehow missing.
+      const wantBlur = req.query.img === 'blur' && row.blur && fs.existsSync(blurPath);
+      return res.sendFile(wantBlur ? blurPath : fullPath, (err) => {
+        if (err) {
+          console.error('File send error:', err.message);
+          res.status(404).send('Image not found');
+        }
+      });
+    }
+
+    // Primary view — this is the one that gets logged.
     logVisit(row.id, req);
 
     if (row.type === 'url') {
       res.redirect(row.target);
+    } else if (row.blur) {
+      // Serve the teasing pixelated preview that reveals the original on click.
+      res.render('preview', { code: row.code });
     } else {
-      res.sendFile(path.join(__dirname, 'public/uploads', row.target), (err) => {
+      res.sendFile(path.join(uploads, row.target), (err) => {
         if (err) {
           console.error('File send error:', err.message);
           res.status(404).send('Image not found');
