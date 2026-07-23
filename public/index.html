@@ -148,6 +148,34 @@
       max-width: 95%;
     }
 
+    kbd {
+      font-family: inherit;
+      font-size: 0.72rem;
+      color: #777;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 3px;
+      padding: 0.05rem 0.3rem;
+    }
+
+    /* Thumbnail of the chosen / pasted image — the only real confirmation a
+       pasted screenshot landed, since clipboard images carry no filename. */
+    .thumb {
+      display: none;
+      margin-top: 0.7rem;
+      max-width: 100%;
+      max-height: 110px;
+      border: 1px solid #222;
+    }
+    .thumb.show { display: block; }
+
+    /* Brief green flash when an image is pasted. */
+    @keyframes pasteflash {
+      0%   { border-color: #0f0; background: rgba(0, 255, 0, 0.12); }
+      100% { border-color: #0f0; background: rgba(0, 255, 0, 0.015); }
+    }
+    .drop-zone.pasted { animation: pasteflash 0.6s ease-out; }
+
     .blur-option {
       display: flex;
       align-items: flex-start;
@@ -275,9 +303,10 @@
           <path d="M19 13v5H5v-5H3v7a2 2 0 002 2h14a2 2 0 002-2v-7h-2zm-7-1l5-5h-4V3H9v4H5l5 5z"/>
         </svg>
 
-        <div class="drop-text">drop image or click</div>
-        <div class="drop-sub">PNG · JPG · GIF • max 10 MB</div>
+        <div class="drop-text">drop image, paste or click</div>
+        <div class="drop-sub">PNG · JPG · GIF • max 10 MB • <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste</div>
 
+        <img id="thumb" class="thumb" alt="" />
         <div id="file-name" class="file-name"></div>
       </label>
 
@@ -305,6 +334,9 @@
     const submit = document.getElementById('submit');
     const blurOption = document.getElementById('blur-option');
     const blur = document.getElementById('blur');
+    const thumb = document.getElementById('thumb');
+
+    let thumbUrl = null;
 
     function check() {
       const hasFile = fileInput.files.length > 0;
@@ -314,10 +346,61 @@
       if (!hasFile) blur.checked = false;
     }
 
+    // Render (or clear) the little preview of the selected image.
+    function showThumb(file) {
+      if (thumbUrl) { URL.revokeObjectURL(thumbUrl); thumbUrl = null; }
+      if (!file) { thumb.classList.remove('show'); thumb.removeAttribute('src'); return; }
+      thumbUrl = URL.createObjectURL(file);
+      thumb.src = thumbUrl;
+      thumb.classList.add('show');
+    }
+
+    // Put a File into the (read-only) file input via a DataTransfer shim.
+    function assignFile(file) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      fileInput.files = dt.files;
+      fileInput.dispatchEvent(new Event('change'));
+    }
+
+    // Clipboard images arrive as nameless blobs; multer derives the stored
+    // extension from originalname, so give them a real one.
+    const EXT = {
+      'image/png': '.png', 'image/jpeg': '.jpg', 'image/jpg': '.jpg',
+      'image/gif': '.gif', 'image/webp': '.webp', 'image/bmp': '.bmp',
+    };
+
+    function namedImage(file) {
+      const ext = EXT[file.type] || '.png';
+      if (file.name && /\.[a-z0-9]+$/i.test(file.name)) return file;
+      return new File([file], 'pasted-' + Date.now() + ext, { type: file.type });
+    }
+
     url.addEventListener('input', check);
     fileInput.addEventListener('change', () => {
       check();
-      fileName.textContent = fileInput.files.length ? fileInput.files[0].name : '';
+      const f = fileInput.files[0];
+      fileName.textContent = f ? f.name : '';
+      showThumb(f || null);
+    });
+
+    // Paste an image from the clipboard anywhere on the page. Text pastes are
+    // left alone so pasting a URL into the URL field still works normally.
+    document.addEventListener('paste', ev => {
+      const items = (ev.clipboardData || window.clipboardData)?.items || [];
+      for (const item of items) {
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (!file) continue;
+          ev.preventDefault();
+          assignFile(namedImage(file));
+          url.value = '';                       // an image wins over a stale URL
+          dropzone.classList.remove('pasted');
+          void dropzone.offsetWidth;            // restart the flash animation
+          dropzone.classList.add('pasted');
+          return;
+        }
+      }
     });
 
     ['dragenter', 'dragover'].forEach(e => dropzone.addEventListener(e, ev => {
@@ -331,10 +414,8 @@
     }));
 
     dropzone.addEventListener('drop', ev => {
-      if (ev.dataTransfer.files.length) {
-        fileInput.files = ev.dataTransfer.files;
-        fileInput.dispatchEvent(new Event('change'));
-      }
+      const file = ev.dataTransfer.files[0];
+      if (file) assignFile(namedImage(file));
     });
   </script>
 

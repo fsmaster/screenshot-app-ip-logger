@@ -7,7 +7,9 @@ This tool logs personal data (IP addresses, browser details). Use responsibly an
 
 ## Features
 
-- Modern landing page with URL input or image upload
+- Modern landing page with URL input or image upload — pick a file, drag &amp; drop,
+  or **paste straight from the clipboard** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>V</kbd>,
+  ideal for screenshots), with a thumbnail preview of what you're about to upload
 - Generates two links:
   - Short link (`https://scerenshot.app/xxxxxx`) → redirects to URL or serves image + logs visitor
   - Tracking link (`https://scerenshot.app/track/yyyyyy`) → shows list of visits
