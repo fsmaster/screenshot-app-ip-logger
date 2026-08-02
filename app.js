@@ -295,12 +295,14 @@ app.post('/create', upload.single('image'), async (req, res) => {
 
       res.send(`
         <h2>Success!</h2>
-        <p>Share link: <strong><a href="${BASE_URL}/${code}">${BASE_URL}/${code}</a></strong>${blur ? ' <em>(blurred preview)</em>' : ''}</p>
+        <p>Share link: <strong><a href="${BASE_URL}/${code}">${BASE_URL}/${code}</a></strong>${blur ? ' <em>(pixelated teaser)</em> — add <code>?full=1</code> for original' : ''}</p>
         <p>Track visits: <strong><a href="${BASE_URL}/track/${trackCode}">${BASE_URL}/track/${trackCode}</a></strong></p>
       `);
     }
   );
 });
+
+// Handle short link (redirect or serve image + log visit)
 
 // Handle short link (redirect or serve image + log visit)
 app.get('/:code', (req, res) => {
@@ -317,31 +319,27 @@ app.get('/:code', (req, res) => {
 
     const uploads = path.join(__dirname, 'public/uploads');
 
-    // Sub-resources requested by the blurred preview page (?img=blur|full).
-    // These are already-counted parts of a logged view, so they do NOT log again.
-    if (row.type === 'image' && (req.query.img === 'blur' || req.query.img === 'full')) {
-      const blurPath = path.join(uploads, blurFilename(row.target));
-      const fullPath = path.join(uploads, row.target);
-      // Fall back to the full image if a blurred copy is somehow missing.
-      const wantBlur = req.query.img === 'blur' && row.blur && fs.existsSync(blurPath);
-      return res.sendFile(wantBlur ? blurPath : fullPath, (err) => {
-        if (err) {
-          console.error('File send error:', err.message);
-          res.status(404).send('Image not found');
-        }
-      });
-    }
-
-    // Primary view — this is the one that gets logged.
+    // Log the visit (for all primary accesses — blurred or not).
     logVisit(row.id, req);
 
     if (row.type === 'url') {
       res.redirect(row.target);
-    } else if (row.blur) {
-      // Serve the teasing pixelated preview that reveals the original on click.
-      res.render('preview', { code: row.code });
-    } else {
-      res.sendFile(path.join(uploads, row.target), (err) => {
+    } else if (row.type === 'image') {
+      const blurPath = path.join(uploads, blurFilename(row.target));
+      const fullPath = path.join(uploads, row.target);
+
+      // Blurred link: show teaser by default, full-res if ?full=1.
+      if (row.blur && req.query.full !== '1' && fs.existsSync(blurPath)) {
+        return res.sendFile(blurPath, (err) => {
+          if (err) {
+            console.error('File send error:', err.message);
+            res.status(404).send('Image not found');
+          }
+        });
+      }
+
+      // Normal or full-res view: serve the original.
+      res.sendFile(fullPath, (err) => {
         if (err) {
           console.error('File send error:', err.message);
           res.status(404).send('Image not found');
