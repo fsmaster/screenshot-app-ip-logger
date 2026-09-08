@@ -317,6 +317,15 @@
           <span class="blur-title">Blur preview</span>
           <span class="blur-sub">show a pixelated teaser — "click to view full resolution"</span>
         </span>
+
+      <label class="blur-option" id="blur-interactive-option">
+        <input type="checkbox" name="blur_interactive" id="blur-interactive" />
+        <span class="blur-box"></span>
+        <span class="blur-text">
+          <span class="blur-title">Interactive Blur</span>
+          <span class="blur-sub">heavily pixelated, reveal on click</span>
+        </span>
+      </label>
       </label>
     </div>
 
@@ -334,6 +343,8 @@
     const submit = document.getElementById('submit');
     const blurOption = document.getElementById('blur-option');
     const blur = document.getElementById('blur');
+    const blurInteractiveOption = document.getElementById("blur-interactive-option");
+    const blurInteractive = document.getElementById("blur-interactive");
     const thumb = document.getElementById('thumb');
 
     let thumbUrl = null;
@@ -343,7 +354,8 @@
       submit.disabled = !(url.value.trim() || hasFile);
       // Blur only makes sense for images.
       blurOption.classList.toggle('enabled', hasFile);
-      if (!hasFile) blur.checked = false;
+      blurInteractiveOption.classList.toggle("enabled", hasFile);
+      if (!hasFile) { blur.checked = false; blurInteractive.checked = false; }
     }
 
     // Render (or clear) the little preview of the selected image.

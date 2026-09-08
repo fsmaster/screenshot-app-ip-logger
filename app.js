@@ -78,7 +78,8 @@ db.serialize(() => {
       track_code TEXT UNIQUE NOT NULL,
       type       TEXT NOT NULL CHECK(type IN ('url', 'image')),
       target     TEXT NOT NULL,
-      blur       INTEGER NOT NULL DEFAULT 0
+      blur       INTEGER NOT NULL DEFAULT 0,
+      blur_interactive INTEGER NOT NULL DEFAULT 0
     )
   `);
 
@@ -134,6 +135,14 @@ function randomCode() {
 // Width (px) the image is squashed down to before being blown back up. The
 // smaller this is, the chunkier / more unrecognisable the pixelation.
 const BLUR_WIDTH = 80;
+const BLUR_WIDTH_INTERACTIVE = 40;  // heavy pixelation for reveal
+
+// Derive the on-disk name of an interactive blur file: "1720000000.png" -> "1720000000.interactive.png".
+function interactiveBlurFilename(filename) {
+  const ext = path.extname(filename);
+  return filename.slice(0, filename.length - ext.length) + '.interactive' + ext;
+}
+
 
 // Derive the on-disk name of an image's blurred sibling: "1720000000.png" -> "1720000000.blur.png".
 function blurFilename(filename) {
@@ -146,12 +155,12 @@ function blurFilename(filename) {
 // full-resolution original. Squash to BLUR_WIDTH px wide, blow it back up with
 // nearest-neighbour sampling (hard mosaic), then a light gaussian to blend the
 // blocks into a "can't-quite-make-it-out" haze. Resolves true on success.
-async function makeBlur(srcPath, destPath) {
+async function makeBlur(srcPath, destPath, width = BLUR_WIDTH) {
   try {
     const img = await Jimp.read(srcPath);
     const w = img.bitmap.width;
     const h = img.bitmap.height;
-    const tw = Math.max(1, BLUR_WIDTH);
+    const tw = Math.max(1, width);
     const th = Math.max(1, Math.round((h * tw) / w));
 
     img
@@ -252,8 +261,9 @@ app.get('/', (req, res) => {
 app.post('/create', upload.single('image'), async (req, res) => {
   const { url } = req.body;
   const file    = req.file;
-  // Blur only applies to images. Checkbox arrives as "on" when ticked.
-  const wantBlur = !!file && (req.body.blur === 'on' || req.body.blur === '1' || req.body.blur === 'true');
+  // Blur options only apply to images. Checkboxes arrive as "on" when ticked.
+  const wantBlur         = !!file && (req.body.blur === 'on' || req.body.blur === '1' || req.body.blur === 'true');
+  const wantBlurInteractive = !!file && (req.body.blur_interactive === 'on' || req.body.blur_interactive === '1' || req.body.blur_interactive === 'true');
 
   let type, target;
 
@@ -272,35 +282,49 @@ app.post('/create', upload.single('image'), async (req, res) => {
     return res.status(400).send('Provide a URL or upload an image');
   }
 
-  // Pre-generate the pixelated preview so serving is instant. If generation
-  // fails we silently fall back to a normal (unblurred) link.
-  let blur = 0;
+  // Pre-generate blurred versions if enabled. Fall back silently on failure.
+  let blur = 0, blur_interactive = 0;
+  const srcPath = path.join(__dirname, 'public/uploads', target);
+
   if (wantBlur) {
-    const srcPath  = path.join(__dirname, 'public/uploads', target);
     const destPath = path.join(__dirname, 'public/uploads', blurFilename(target));
-    blur = (await makeBlur(srcPath, destPath)) ? 1 : 0;
+    blur = (await makeBlur(srcPath, destPath, BLUR_WIDTH)) ? 1 : 0;
+  }
+
+  if (wantBlurInteractive) {
+    const destPath = path.join(__dirname, 'public/uploads', interactiveBlurFilename(target));
+    blur_interactive = (await makeBlur(srcPath, destPath, BLUR_WIDTH_INTERACTIVE)) ? 1 : 0;
   }
 
   const code      = randomCode();
   const trackCode = randomCode();
 
   db.run(
-    `INSERT INTO links (code, track_code, type, target, blur) VALUES (?, ?, ?, ?, ?)`,
-    [code, trackCode, type, target, blur],
+    `INSERT INTO links (code, track_code, type, target, blur, blur_interactive) VALUES (?, ?, ?, ?, ?, ?)`,
+    [code, trackCode, type, target, blur, blur_interactive],
     function (err) {
       if (err) {
         console.error('Database insert failed:', err.message);
         return res.status(500).send('Error creating tracking link');
       }
 
+      let blurNote = '';
+      if (blur_interactive) {
+        blurNote = ' <em>(heavily pixelated, click to reveal)</em>';
+      } else if (blur) {
+        blurNote = ' <em>(pixelated teaser)</em> — add <code>?full=1</code> for original';
+      }
+
       res.send(`
         <h2>Success!</h2>
-        <p>Share link: <strong><a href="${BASE_URL}/${code}">${BASE_URL}/${code}</a></strong>${blur ? ' <em>(pixelated teaser)</em> — add <code>?full=1</code> for original' : ''}</p>
+        <p>Share link: <strong><a href="${BASE_URL}/${code}">${BASE_URL}/${code}</a></strong>${blurNote}</p>
         <p>Track visits: <strong><a href="${BASE_URL}/track/${trackCode}">${BASE_URL}/track/${trackCode}</a></strong></p>
       `);
     }
   );
 });
+
+
 
 // Handle short link (redirect or serve image + log visit)
 
@@ -325,12 +349,29 @@ app.get('/:code', (req, res) => {
     if (row.type === 'url') {
       res.redirect(row.target);
     } else if (row.type === 'image') {
+      // Interactive blur: render HTML page with click-to-reveal.
+      if (row.blur_interactive) {
+        return res.render('interactive', { code: row.code });
+      }
+
       const blurPath = path.join(uploads, blurFilename(row.target));
       const fullPath = path.join(uploads, row.target);
 
-      // Blurred link: show teaser by default, full-res if ?full=1.
+      // Standard blur: show teaser by default, full-res if ?full=1.
       if (row.blur && req.query.full !== '1' && fs.existsSync(blurPath)) {
         return res.sendFile(blurPath, (err) => {
+          if (err) {
+            console.error('File send error:', err.message);
+            res.status(404).send('Image not found');
+          }
+        });
+      }
+
+      // Sub-resources for interactive reveal (?img=interactive|full).
+      if (req.query.img === 'interactive' || req.query.img === 'full') {
+        const intPath = path.join(uploads, interactiveBlurFilename(row.target));
+        const wantInteractive = req.query.img === 'interactive' && row.blur_interactive && fs.existsSync(intPath);
+        return res.sendFile(wantInteractive ? intPath : fullPath, (err) => {
           if (err) {
             console.error('File send error:', err.message);
             res.status(404).send('Image not found');
@@ -349,7 +390,6 @@ app.get('/:code', (req, res) => {
   });
 });
 
-// Tracking / statistics page
 app.get('/track/:track', (req, res) => {
   const { track } = req.params;
 

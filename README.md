@@ -15,6 +15,9 @@ This tool logs personal data (IP addresses, browser details). Use responsibly an
   - Tracking link (`https://scerenshot.app/track/yyyyyy`) → shows list of visits
 - **Blur teaser** (images): tick the **Blur** checkbox when uploading to share a
   pixelated, blurred version by default. The short link serves the teaser image
+- **Interactive Blur** (images): heavily pixelated, requires a click to reveal full-res.
+  Renders an HTML page with click-to-reveal JavaScript (doesn't work in
+  messenger previews but offers full-screen immersion for direct sharing)
   (no JavaScript needed; works with messenger previews, etc.). Append `?full=1` to
   get the original. Pixelation is generated once at upload with
   [jimp](https://www.npmjs.com/package/jimp) (squash to 80&nbsp;px wide,
