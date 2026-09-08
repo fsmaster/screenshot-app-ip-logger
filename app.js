@@ -91,6 +91,14 @@ db.serialize(() => {
     }
   });
 
+  // Migrate older databases that predate the blur_interactive column.
+  db.all(`PRAGMA table_info(links)`, (err, cols) => {
+    if (err || !cols) return;
+    if (!cols.some(c => c.name === 'blur_interactive')) {
+      db.run(`ALTER TABLE links ADD COLUMN blur_interactive INTEGER NOT NULL DEFAULT 0`);
+    }
+  });
+
   db.run(`
     CREATE TABLE IF NOT EXISTS visits (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
